@@ -27,8 +27,8 @@ def plot_solution(
     n_rows = len(board)
     n_cols = len(board[0])
     
-    # Create figure and axis
-    fig, ax = plt.subplots(1, 1, figsize=(10, 8))
+    # Create figure and axis - larger size for better rendering in Streamlit
+    fig, ax = plt.subplots(1, 1, figsize=(12, 10))
     
     # Define colors for pieces
     piece_colors = ['red', 'blue', 'green', 'orange', 'purple', 'brown', 'pink', 'gray', 'olive']
