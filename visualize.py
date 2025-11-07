@@ -80,8 +80,14 @@ def plot_solution(
             
             # Add text for the cell value (except -1 which represents empty)
             if cell_value != -1:
+                # Not bold when text is under a piece, bold otherwise
+                if piece_coverage[i, j] == 1:
+                    font_weight = 'normal'
+                else:
+                    font_weight = 'bold'
                 ax.text(j + 0.5, n_rows - 1 - i + 0.5, str(cell_value),
-                       ha='center', va='center', fontsize=12, fontweight='bold')
+                       ha='center', va='center', fontsize=12, 
+                       fontweight=font_weight, color='black')
     
     # Set up the plot
     ax.set_xlim(0, n_cols)
