@@ -1,49 +1,100 @@
 #!/usr/bin/env python3
 """
-Standalone game solver that returns solution existence and visualization.
-Usage: solve_game(dices) -> (bool, matplotlib_figure_or_None)
+Standalone game solver that returns structured solution data.
+Usage: solve_game(dices, all_solutions=False) -> SolveResult
 """
 
 from collections import defaultdict
+from dataclasses import dataclass
+from typing import Sequence
 import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib.patches as patches
 from ortools.sat.python import cp_model
+from game_defs import BOARD, PIECES
 
 
-# Game constants
-PIECES = [
-    [[1], [1], [1]],  # Vertical bar
-    [[1,1,1], [1, 0, 1]],  # M
-    [[1,0,0], [1, 1, 0], [0,1,1]],  # W 
-    [[1, 0, 0], [1,1,1], [0,0,1]],  # Tetris
-    [[0,0,1], [1,1,1], [0,1,0]],  # Weird
-    [[0,1], [0,1], [0,1], [1,1]],  # Not-L
-    [[1,1], [1,1], [1,0]],  # Fat
-    [[1,0], [1,1], [0,1], [0,1]],  # Long
-    [[1,0], [1,0], [1,1]]  # L
-]
-
-BOARD = [
-    [1, 5, 4, 3, 2, 6, -1],
-    [-1, 3, 1, 2, 6, 4, 5],
-    [6, 2, 3, 5, 1, -1, 4],
-    [3,4,2,6, -1, 5, 1], 
-    [4, 6, -1, 1, 5, 2, 3],
-    [5, -1, 6, 4, 3, 1, 2],
-    [2, 1, 5, -1, 4, 3, 6]
-]
+@dataclass(frozen=True)
+class PiecePlacement:
+    piece_idx: int
+    rotation: int
+    position: tuple[int, int]
 
 
-def solve_game(dices):
+@dataclass(frozen=True)
+class DicePlacement:
+    dice_value: int
+    position: tuple[int, int]
+
+
+@dataclass(frozen=True)
+class Solution:
+    pieces: Sequence[PiecePlacement]
+    dice: Sequence[DicePlacement]
+
+
+@dataclass(frozen=True)
+class SolveResult:
+    solutions: Sequence[Solution]
+
+
+def _extract_solution(solver_or_callback, piece_placements, dice_placements):
     """
-    Solve the game puzzle and return solution existence + visualization.
+    Extract a solution from the solver/callback state.
+    
+    Args:
+        solver_or_callback: Either a CpSolver or CpSolverSolutionCallback instance
+        piece_placements: List of piece placement dictionaries
+        dice_placements: List of dice placement dictionaries
+        
+    Returns:
+        Solution: The extracted solution
+    """
+    pieces = [
+        PiecePlacement(
+            piece_idx=p['piece_idx'],
+            rotation=p['rotation'],
+            position=p['position'],
+        )
+        for p in piece_placements
+        if solver_or_callback.BooleanValue(p['variable'])
+    ]
+    dice = [
+        DicePlacement(
+            dice_value=d['dice_value'],
+            position=d['position'],
+        )
+        for d in dice_placements
+        if solver_or_callback.BooleanValue(d['variable'])
+    ]
+    return Solution(pieces=pieces, dice=dice)
+
+
+class _AllSolutionsCallback(cp_model.CpSolverSolutionCallback):
+    def __init__(self, piece_placements, dice_placements):
+        super().__init__()
+        self._piece_placements = piece_placements
+        self._dice_placements = dice_placements
+        self.solution_count = 0
+        self.solutions: list[Solution] = []
+
+    def on_solution_callback(self):
+        self.solution_count += 1
+        solution = _extract_solution(self, self._piece_placements, self._dice_placements)
+        self.solutions.append(solution)
+
+
+# Game constants moved to game_defs.py
+
+
+def solve_game(dices, all_solutions: bool = False):
+    """
+    Solve the game puzzle and return structured solution data.
     
     Args:
         dices: Tuple of 6 dice values to place
+        all_solutions: If True, enumerate all feasible solutions. If False, return at most one solution.
         
     Returns:
-        tuple: (solution_exists: bool, figure: matplotlib.figure.Figure or None)
+        SolveResult: Contains a sequence of Solution objects
     """
     n_rows = len(BOARD)
     n_cols = len(BOARD[0])
@@ -83,6 +134,7 @@ def solve_game(dices):
         model.add_exactly_one(piece_rotations)
     
     # Dice constraints
+    dices = sorted(dices)
     for idx, dice_value in enumerate(dices):
         dice_positions = []
         for i in range(n_rows):
@@ -118,101 +170,41 @@ def solve_game(dices):
                 model.add_exactly_one(covered_positions[i,j])
     
     # Solve
+    if all_solutions:
+        solver = cp_model.CpSolver()
+        solver.parameters.enumerate_all_solutions = True
+        solver.parameters.log_search_progress = False
+        cb = _AllSolutionsCallback(piece_placements, dice_placements)
+        solver.Solve(model, cb)
+        return SolveResult(solutions=cb.solutions)
+    
+    # Single solution mode
     solver = cp_model.CpSolver()
-    status = solver.solve(model)
+    status = solver.Solve(model)
     
     if status not in [cp_model.OPTIMAL, cp_model.FEASIBLE]:
-        return False, None
+        return SolveResult(solutions=[])
     
-    # Extract solution
-    solution_pieces = []
-    solution_dice = []
-    
-    for placement in piece_placements:
-        if solver.value(placement['variable']) == 1:
-            solution_pieces.append(placement)
-    
-    for placement in dice_placements:
-        if solver.value(placement['variable']) == 1:
-            solution_dice.append(placement)
-    
-    # Create visualization
-    fig, ax = plt.subplots(1, 1, figsize=(10, 8))
-    
-    piece_colors = ['red', 'blue', 'green', 'orange', 'purple', 'brown', 'pink', 'gray', 'olive']
-    piece_coverage = np.zeros((n_rows, n_cols), dtype=int)
-    piece_colors_grid = np.zeros((n_rows, n_cols), dtype=int)
-    
-    # Mark cells covered by pieces
-    for piece in solution_pieces:
-        piece_idx = piece['piece_idx']
-        start_row, start_col = piece['position']
-        piece_shape = piece['piece_shape']
-        
-        for i in range(piece_shape.shape[0]):
-            for j in range(piece_shape.shape[1]):
-                if piece_shape[i, j] == 1:
-                    row = start_row + i
-                    col = start_col + j
-                    piece_coverage[row, col] = 1
-                    piece_colors_grid[row, col] = piece_idx
-    
-    # Create the visualization
-    for i in range(n_rows):
-        for j in range(n_cols):
-            cell_value = BOARD[i][j]
-            
-            if piece_coverage[i, j] == 1:
-                color = piece_colors[piece_colors_grid[i, j] % len(piece_colors)]
-            else:
-                is_dice_cell = any(d['position'] == (i, j) for d in solution_dice)
-                if is_dice_cell:
-                    color = 'lightblue'
-                else:
-                    color = 'white'
-            
-            rect = patches.Rectangle((j, n_rows - 1 - i), 1, 1, 
-                                   linewidth=1, edgecolor='black', 
-                                   facecolor=color)
-            ax.add_patch(rect)
-            
-            if cell_value != -1:
-                ax.text(j + 0.5, n_rows - 1 - i + 0.5, str(cell_value),
-                       ha='center', va='center', fontsize=12, fontweight='bold')
-    
-    ax.set_xlim(0, n_cols)
-    ax.set_ylim(0, n_rows)
-    ax.set_aspect('equal')
-    ax.set_xticks(range(n_cols + 1))
-    ax.set_yticks(range(n_rows + 1))
-    ax.grid(True, alpha=0.3)
-    ax.set_title('Game Solution\nRed=Vertical Bar, Blue=M, Green=W, Orange=Tetris, Purple=Weird, Brown=Not-L, Pink=Fat, Gray=Long, Olive=L\nLight Blue=Dice Cells', 
-                 fontsize=10, pad=20)
-    
-    # Add legend
-    legend_elements = []
-    for i, color in enumerate(piece_colors[:len(solution_pieces)]):
-        piece_names = ['Vertical Bar', 'M', 'W', 'Tetris', 'Weird', 'Not-L', 'Fat', 'Long', 'L']
-        if i < len(piece_names):
-            legend_elements.append(patches.Patch(color=color, label=f'Piece {i}: {piece_names[i]}'))
-    
-    legend_elements.append(patches.Patch(color='lightblue', label='Dice Cells'))
-    legend_elements.append(patches.Patch(color='white', label='Empty Cells'))
-    
-    ax.legend(handles=legend_elements, loc='center left', bbox_to_anchor=(1, 0.5))
-    plt.tight_layout()
-    
-    return True, fig
+    # Extract single solution
+    single_solution = _extract_solution(solver, piece_placements, dice_placements)
+    return SolveResult(solutions=[single_solution])
 
 
 # Example usage
 if __name__ == "__main__":
-    # Test with all 6s
-    solution_exists, fig = solve_game((6,6,6,6,6,6))
+    import matplotlib.pyplot as plt
+    from visualize import plot_solution
+    from game_defs import BOARD, PIECES
     
-    if solution_exists:
-        print("✅ Solution found!")
+    # Test with all 6s
+    result = solve_game((6,6,6,6,6,6))
+    
+    if len(result.solutions) > 0:
+        print(f"✅ Solution found! ({len(result.solutions)} solution(s))")
+        # Visualize first solution
+        fig = plot_solution(BOARD, PIECES, result.solutions[0])
         fig.savefig('solution.png', dpi=300, bbox_inches='tight')
         print("📁 Solution saved to 'solution.png'")
+        plt.close(fig)
     else:
         print("❌ No solution found!")

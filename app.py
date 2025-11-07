@@ -1,6 +1,8 @@
 import streamlit as st
 import matplotlib.pyplot as plt
 from solve_game import solve_game
+from visualize import plot_solution
+from game_defs import BOARD, PIECES
 
 # Page configuration
 st.set_page_config(
@@ -56,12 +58,14 @@ def main():
                 # Show loading spinner
                 with st.spinner("Solving puzzle..."):
                     # Solve the game
-                    solution_exists, fig = solve_game(dices)
+                    result = solve_game(dices)
                 
-                if solution_exists:
+                if len(result.solutions) > 0:
                     # Display the solution directly
                     st.markdown("### Solution")
+                    fig = plot_solution(BOARD, PIECES, result.solutions[0])
                     st.pyplot(fig, width='stretch')
+                    plt.close(fig)
                 else:
                     st.error("❌ No Solution Found - Try different values!")
 
