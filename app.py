@@ -31,19 +31,23 @@ def main():
     with st.container():
         st.markdown("### Select Your Dice Values")
         
-        # Create two columns for dice inputs
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
+        # Create two rows for dice inputs (3 columns per row)
+        # First row: Dice 1, 2, 3
+        row1_col1, row1_col2, row1_col3 = st.columns(3)
+        with row1_col1:
             dice1 = st.selectbox("Dice 1", options=["-", 1, 2, 3, 4, 5, 6], index=0)
-            dice4 = st.selectbox("Dice 4", options=["-", 1, 2, 3, 4, 5, 6], index=0)
-        
-        with col2:
+        with row1_col2:
             dice2 = st.selectbox("Dice 2", options=["-", 1, 2, 3, 4, 5, 6], index=0)
-            dice5 = st.selectbox("Dice 5", options=["-", 1, 2, 3, 4, 5, 6], index=0)
-        
-        with col3:
+        with row1_col3:
             dice3 = st.selectbox("Dice 3", options=["-", 1, 2, 3, 4, 5, 6], index=0)
+        
+        # Second row: Dice 4, 5, 6
+        row2_col1, row2_col2, row2_col3 = st.columns(3)
+        with row2_col1:
+            dice4 = st.selectbox("Dice 4", options=["-", 1, 2, 3, 4, 5, 6], index=0)
+        with row2_col2:
+            dice5 = st.selectbox("Dice 5", options=["-", 1, 2, 3, 4, 5, 6], index=0)
+        with row2_col3:
             dice6 = st.selectbox("Dice 6", options=["-", 1, 2, 3, 4, 5, 6], index=0)
         
         # Solve button
