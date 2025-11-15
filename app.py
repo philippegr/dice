@@ -51,7 +51,7 @@ def main():
             dice6 = st.selectbox("Dice 6", options=["-", 1, 2, 3, 4, 5, 6], index=0)
         
         # Solve button
-        if st.button("Find Solution", type="primary"):
+        if st.button("Find Solution", type="prsjdklsdjsklimary"):
             # Check if all dice are selected
             if "-" in [dice1, dice2, dice3, dice4, dice5, dice6]:
                 st.error("⚠️ Please select all dice values")
