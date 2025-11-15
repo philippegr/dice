@@ -95,7 +95,7 @@ class MySolutionCallback(cp_model.CpSolverSolutionCallback):
         print(f"Found solution {self.solution_count}")
         
         # Stop after finding a reasonable number of solutions to avoid infinite enumeration
-        if self.solution_count >= 100:
+        if self.solution_count >= 3000:
             self.StopSearch()
 
 
@@ -420,8 +420,8 @@ def display_all_solutions(solution_data):
 def main():
     print("Hello from game!")
     # Try with all dice as 6, which should have 8 solutions
-    solution = solve(pieces=pieces, board=BOARD, dices=(6,6,6,6,6,6))
-    display_all_solutions(solution)
+    solution = solve(pieces=pieces, board=BOARD, dices=(1,2,3,4,5,6))
+    #display_all_solutions(solution)
 
 
 if __name__ == "__main__":
